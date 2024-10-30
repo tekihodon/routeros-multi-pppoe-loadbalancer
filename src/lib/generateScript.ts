@@ -60,51 +60,38 @@ const generateLanScript = (lanRanges: string[]) => {
     script += `add address=${range} list=LAN-ADDRESS-LIST\n`;
   });
   
-  script += `\n/ip firewall mangle\n`;
-  script += `add action=accept chain=prerouting src-address-list=LAN-ADDRESS-LIST dst-address-list=LAN-ADDRESS-LIST\n`;
-  
   return script.trim();
 };
 
 const generateLoadBalanceScript = (method: BalanceMethod, count: number) => {
   let script = '';
   
-  // Create routing marks
   script += `/ip firewall mangle\n`;
   
   if (method === 'per-connection') {
-    // Mark connections for equal distribution
-    script += `add action=mark-connection chain=prerouting dst-address-list=!LAN-ADDRESS-LIST src-address-list=LAN-ADDRESS-LIST connection-mark=no-mark per-connection-classifier=both-addresses-and-ports:${count} new-connection-mark=conn_\n`;
-    
-    // Mark routing based on connections
+    // Per-connection method
     for (let i = 1; i <= count; i++) {
-      script += `add action=mark-routing chain=prerouting connection-mark=conn_${i-1} new-routing-mark=to_pppoe${i}\n`;
+      script += `add chain=prerouting connection-mark=no-mark action=mark-connection new-connection-mark=pppoe_conn_${i} passthrough=yes per-connection-classifier=both-addresses-and-ports:${count}/${i-1}\n`;
+      script += `add chain=prerouting connection-mark=pppoe_conn_${i} action=mark-routing new-routing-mark=to-pppoe-out${i} passthrough=no\n`;
     }
   } else {
-    // Mark routing based on source address
+    // Source address method
     for (let i = 1; i <= count; i++) {
-      script += `add action=mark-routing chain=prerouting dst-address-list=!LAN-ADDRESS-LIST src-address-list=LAN-ADDRESS-LIST per-connection-classifier=src-address:${count} new-routing-mark=to_pppoe${i}\n`;
+      script += `add chain=prerouting src-address-list=LAN-ADDRESS-LIST action=mark-routing new-routing-mark=to-pppoe-out${i} passthrough=no per-connection-classifier=src-address:${count}/${i-1}\n`;
     }
   }
 
-  // Create routing tables
+  // Add routing tables
   script += `\n/routing table\n`;
   for (let i = 1; i <= count; i++) {
-    script += `add name=to_pppoe${i} fib\n`;
+    script += `add name=to-pppoe-out${i} fib\n`;
   }
   
-  // Add routes to routing tables
+  // Add routes
   script += `\n/ip route\n`;
   for (let i = 1; i <= count; i++) {
-    script += `add dst-address=0.0.0.0/0 gateway=pppoe-out${i} routing-table=to_pppoe${i} check-gateway=ping\n`;
+    script += `add dst-address=0.0.0.0/0 gateway=pppoe-out${i} routing-table=to-pppoe-out${i} check-gateway=ping\n`;
   }
 
-  // Add main rules
-  script += `\n/ip firewall mangle\n`;
-  script += `add action=accept chain=prerouting src-address-list=LAN-ADDRESS-LIST dst-address-list=LAN-ADDRESS-LIST\n`;
-  script += `add action=accept chain=prerouting dst-address-list=LAN-ADDRESS-LIST\n`;
-  script += `add action=mark-connection chain=prerouting dst-address-list=!LAN-ADDRESS-LIST src-address-list=LAN-ADDRESS-LIST connection-mark=no-mark new-connection-mark=conn_wan passthrough=yes\n`;
-  script += `add action=mark-routing chain=prerouting connection-mark=conn_wan new-routing-mark=main\n`;
-  
   return script.trim();
 };
