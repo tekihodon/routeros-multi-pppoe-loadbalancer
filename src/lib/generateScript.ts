@@ -69,28 +69,42 @@ const generateLanScript = (lanRanges: string[]) => {
 const generateLoadBalanceScript = (method: BalanceMethod, count: number) => {
   let script = '';
   
-  // Create routing tables
-  script += `/routing table\n`;
-  for (let i = 1; i <= count; i++) {
-    script += `add name=to_pppoe${i} fib\n`;
-  }
-  
-  script += `\n/ip route\n`;
-  for (let i = 1; i <= count; i++) {
-    script += `add dst-address=0.0.0.0/0 gateway=pppoe-out${i} routing-table=to_pppoe${i}\n`;
-  }
-  
-  script += `\n/ip firewall mangle\n`;
+  // Create routing marks
+  script += `/ip firewall mangle\n`;
   
   if (method === 'per-connection') {
+    // Mark connections for equal distribution
     script += `add action=mark-connection chain=prerouting dst-address-list=!LAN-ADDRESS-LIST src-address-list=LAN-ADDRESS-LIST connection-mark=no-mark per-connection-classifier=both-addresses-and-ports:${count} new-connection-mark=conn_\n`;
     
+    // Mark routing based on connections
     for (let i = 1; i <= count; i++) {
       script += `add action=mark-routing chain=prerouting connection-mark=conn_${i-1} new-routing-mark=to_pppoe${i}\n`;
     }
   } else {
-    script += `add action=mark-routing chain=prerouting dst-address-list=!LAN-ADDRESS-LIST src-address-list=LAN-ADDRESS-LIST per-connection-classifier=src-address:${count} new-routing-mark=to_pppoe\n`;
+    // Mark routing based on source address
+    for (let i = 1; i <= count; i++) {
+      script += `add action=mark-routing chain=prerouting dst-address-list=!LAN-ADDRESS-LIST src-address-list=LAN-ADDRESS-LIST per-connection-classifier=src-address:${count} new-routing-mark=to_pppoe${i}\n`;
+    }
   }
+
+  // Create routing tables
+  script += `\n/routing table\n`;
+  for (let i = 1; i <= count; i++) {
+    script += `add name=to_pppoe${i} fib\n`;
+  }
+  
+  // Add routes to routing tables
+  script += `\n/ip route\n`;
+  for (let i = 1; i <= count; i++) {
+    script += `add dst-address=0.0.0.0/0 gateway=pppoe-out${i} routing-table=to_pppoe${i} check-gateway=ping\n`;
+  }
+
+  // Add main rules
+  script += `\n/ip firewall mangle\n`;
+  script += `add action=accept chain=prerouting src-address-list=LAN-ADDRESS-LIST dst-address-list=LAN-ADDRESS-LIST\n`;
+  script += `add action=accept chain=prerouting dst-address-list=LAN-ADDRESS-LIST\n`;
+  script += `add action=mark-connection chain=prerouting dst-address-list=!LAN-ADDRESS-LIST src-address-list=LAN-ADDRESS-LIST connection-mark=no-mark new-connection-mark=conn_wan passthrough=yes\n`;
+  script += `add action=mark-routing chain=prerouting connection-mark=conn_wan new-routing-mark=main\n`;
   
   return script.trim();
 };
