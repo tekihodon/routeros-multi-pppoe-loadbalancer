@@ -42,10 +42,10 @@ const generateMacvlanScript = (ethernetId: string, count: number, username: stri
     script += `add interface=${ethernetId} name=macvlan${i}\n\n`;
   }
   
-  // Add PPPoE clients
+  // Add PPPoE clients with default route enabled
   for (let i = 1; i <= count; i++) {
     script += `/interface pppoe-client\n`;
-    script += `add interface=macvlan${i} name=pppoe-out${i} user=${username} password=${password} add-default-route=no disabled=no\n\n`;
+    script += `add interface=macvlan${i} name=pppoe-out${i} user=${username} password=${password} add-default-route=yes disabled=no\n\n`;
   }
   
   return script.trim();
