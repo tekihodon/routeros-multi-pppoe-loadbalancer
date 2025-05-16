@@ -1,3 +1,4 @@
+
 import type { BalanceMethod } from './constants';
 
 interface GenerateScriptParams {
@@ -95,10 +96,10 @@ const generateLoadBalanceScript = (method: BalanceMethod, count: number) => {
     script += `add name=to-pppoe-out${i} fib\n`;
   }
   
-  // Add routes
+  // Add routes - removed check-gateway=ping parameter
   script += `\n/ip route\n`;
   for (let i = 1; i <= count; i++) {
-    script += `add dst-address=0.0.0.0/0 gateway=pppoe-out${i} routing-table=to-pppoe-out${i} check-gateway=ping\n`;
+    script += `add dst-address=0.0.0.0/0 gateway=pppoe-out${i} routing-table=to-pppoe-out${i}\n`;
   }
 
   return script.trim();
@@ -155,3 +156,4 @@ const generateMangleAddressListScript = (count: number) => {
   
   return script.trim();
 };
+
