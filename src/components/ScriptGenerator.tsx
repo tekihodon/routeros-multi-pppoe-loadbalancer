@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -23,6 +24,8 @@ const ScriptGenerator = () => {
     macvlanScript: string;
     lanScript: string;
     loadBalanceScript: string;
+    addressListScript: string;
+    mangleAddressListScript: string;
   } | null>(null);
 
   const handleGenerate = () => {

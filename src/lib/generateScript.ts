@@ -26,10 +26,18 @@ export const generateScripts = ({
   // Generate load balancing script
   const loadBalanceScript = generateLoadBalanceScript(balanceMethod, pppoeCount);
 
+  // Generate IP address lists based on LAN ranges
+  const addressListScript = generateAddressListScript(lanRanges, pppoeCount);
+  
+  // Generate mangle rules for address lists
+  const mangleAddressListScript = generateMangleAddressListScript(pppoeCount);
+
   return {
     macvlanScript,
     lanScript,
     loadBalanceScript,
+    addressListScript,
+    mangleAddressListScript,
   };
 };
 
@@ -93,5 +101,57 @@ const generateLoadBalanceScript = (method: BalanceMethod, count: number) => {
     script += `add dst-address=0.0.0.0/0 gateway=pppoe-out${i} routing-table=to-pppoe-out${i} check-gateway=ping\n`;
   }
 
+  return script.trim();
+};
+
+/**
+ * Generates a script to create address lists based on LAN ranges and PPPoE count
+ * Each address list will include IP ranges distributed by the last octet
+ */
+const generateAddressListScript = (lanRanges: string[], count: number) => {
+  let script = '';
+  
+  script += `/ip firewall address-list\n`;
+  
+  // For each LAN range, distribute IPs across PPPoE connections
+  lanRanges.forEach(range => {
+    try {
+      // Parse the CIDR notation
+      const [baseIp, cidrMask] = range.split('/');
+      const ipParts = baseIp.split('.');
+      
+      // Skip invalid IP formats
+      if (ipParts.length !== 4) return;
+      
+      const networkPrefix = `${ipParts[0]}.${ipParts[1]}.`;
+      
+      // Distribute IPs across PPPoE connections based on the third octet
+      for (let i = 1; i <= count; i++) {
+        // For each PPPoE, add corresponding IP ranges
+        script += `add address=${networkPrefix}${i}.0/24 list=pppoe-out${i}\n`;
+      }
+    } catch (error) {
+      // Skip invalid CIDR notations
+      console.error(`Invalid CIDR notation: ${range}`);
+    }
+  });
+  
+  return script.trim();
+};
+
+/**
+ * Generates mangle rules that use the created address lists (pppoe-out1, pppoe-out2, etc.)
+ * to mark routing to corresponding routing marks
+ */
+const generateMangleAddressListScript = (count: number) => {
+  let script = '';
+  
+  script += `/ip firewall mangle\n`;
+  
+  // Create mangle rules for each PPPoE connection
+  for (let i = 1; i <= count; i++) {
+    script += `add chain=prerouting src-address-list=pppoe-out${i} action=mark-routing new-routing-mark=to-pppoe-out${i} passthrough=no\n`;
+  }
+  
   return script.trim();
 };
