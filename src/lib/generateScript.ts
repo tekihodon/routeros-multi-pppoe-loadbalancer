@@ -1,4 +1,3 @@
-
 import type { BalanceMethod } from './constants';
 
 interface GenerateScriptParams {
@@ -75,7 +74,20 @@ const generateLanScript = (lanRanges: string[]) => {
 const generateLoadBalanceScript = (method: BalanceMethod, count: number) => {
   let script = '';
   
-  script += `/ip firewall mangle\n`;
+  // Add routing tables first
+  script += `/routing table\n`;
+  for (let i = 1; i <= count; i++) {
+    script += `add name=to-pppoe-out${i} fib\n`;
+  }
+  
+  // Add routes - removed check-gateway=ping parameter
+  script += `\n/ip route\n`;
+  for (let i = 1; i <= count; i++) {
+    script += `add dst-address=0.0.0.0/0 gateway=pppoe-out${i} routing-table=to-pppoe-out${i}\n`;
+  }
+
+  // Add mangle rules after routing tables and routes
+  script += `\n/ip firewall mangle\n`;
   
   if (method === 'per-connection') {
     // Per-connection method
@@ -88,18 +100,6 @@ const generateLoadBalanceScript = (method: BalanceMethod, count: number) => {
     for (let i = 1; i <= count; i++) {
       script += `add chain=prerouting src-address-list=LAN-ADDRESS-LIST action=mark-routing new-routing-mark=to-pppoe-out${i} passthrough=no per-connection-classifier=src-address:${count}/${i-1}\n`;
     }
-  }
-
-  // Add routing tables
-  script += `\n/routing table\n`;
-  for (let i = 1; i <= count; i++) {
-    script += `add name=to-pppoe-out${i} fib\n`;
-  }
-  
-  // Add routes - removed check-gateway=ping parameter
-  script += `\n/ip route\n`;
-  for (let i = 1; i <= count; i++) {
-    script += `add dst-address=0.0.0.0/0 gateway=pppoe-out${i} routing-table=to-pppoe-out${i}\n`;
   }
 
   return script.trim();
@@ -156,4 +156,3 @@ const generateMangleAddressListScript = (count: number) => {
   
   return script.trim();
 };
-
