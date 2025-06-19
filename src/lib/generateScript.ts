@@ -77,28 +77,28 @@ const generateLoadBalanceScript = (method: BalanceMethod, count: number) => {
   // Add routing tables first
   script += `/routing table\n`;
   for (let i = 1; i <= count; i++) {
-    script += `add name=to-pppoe-out${i} fib\n`;
+    script += `add name=to_pppoe_out${i} fib\n`;
   }
   
-  // Add routes - removed check-gateway=ping parameter
+  // Add routes
   script += `\n/ip route\n`;
   for (let i = 1; i <= count; i++) {
-    script += `add dst-address=0.0.0.0/0 gateway=pppoe-out${i} routing-table=to-pppoe-out${i}\n`;
+    script += `add dst-address=0.0.0.0/0 gateway=pppoe-out${i} routing-table=to_pppoe_out${i}\n`;
   }
 
   // Add mangle rules after routing tables and routes
   script += `\n/ip firewall mangle\n`;
   
   if (method === 'per-connection') {
-    // Per-connection method
+    // Per-connection method - RouterOS v7 compatible
     for (let i = 1; i <= count; i++) {
-      script += `add chain=prerouting connection-mark=no-mark action=mark-connection new-connection-mark=pppoe_conn_${i} passthrough=yes per-connection-classifier=both-addresses-and-ports:${count}/${i-1}\n`;
-      script += `add chain=prerouting connection-mark=pppoe_conn_${i} action=mark-routing new-routing-mark=to-pppoe-out${i} passthrough=no\n`;
+      script += `add chain=prerouting connection-mark=no-mark src-address-list=LAN-ADDRESS-LIST action=mark-connection new-connection-mark=pppoe_conn_${i} passthrough=yes per-connection-classifier=both-addresses-and-ports:${count}/${i-1}\n`;
+      script += `add chain=prerouting connection-mark=pppoe_conn_${i} action=mark-routing new-routing-mark=to_pppoe_out${i} passthrough=no\n`;
     }
   } else {
-    // Source address method
+    // Source address method - RouterOS v7 compatible
     for (let i = 1; i <= count; i++) {
-      script += `add chain=prerouting src-address-list=LAN-ADDRESS-LIST action=mark-routing new-routing-mark=to-pppoe-out${i} passthrough=no per-connection-classifier=src-address:${count}/${i-1}\n`;
+      script += `add chain=prerouting src-address-list=LAN-ADDRESS-LIST action=mark-routing new-routing-mark=to_pppoe_out${i} passthrough=no per-connection-classifier=src-address:${count}/${i-1}\n`;
     }
   }
 
@@ -151,7 +151,7 @@ const generateMangleAddressListScript = (count: number) => {
   
   // Create mangle rules for each PPPoE connection
   for (let i = 1; i <= count; i++) {
-    script += `add chain=prerouting src-address-list=pppoe-out${i} action=mark-routing new-routing-mark=to-pppoe-out${i} passthrough=no\n`;
+    script += `add chain=prerouting src-address-list=pppoe-out${i} action=mark-routing new-routing-mark=to_pppoe_out${i} passthrough=no\n`;
   }
   
   return script.trim();
