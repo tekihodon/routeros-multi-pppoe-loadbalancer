@@ -90,10 +90,10 @@ const generateLoadBalanceScript = (method: BalanceMethod, count: number) => {
   script += `\n/ip firewall mangle\n`;
   
   if (method === 'per-connection') {
-    // Per-connection method - RouterOS v7 compatible
+    // Per-connection method using NTH - RouterOS v7 compatible
     for (let i = 1; i <= count; i++) {
-      script += `add chain=prerouting connection-mark=no-mark src-address-list=LAN-ADDRESS-LIST action=mark-connection new-connection-mark=pppoe_conn_${i} passthrough=yes per-connection-classifier=both-addresses-and-ports:${count}/${i-1}\n`;
-      script += `add chain=prerouting connection-mark=pppoe_conn_${i} action=mark-routing new-routing-mark=to_pppoe_out${i} passthrough=no\n`;
+      script += `add chain=prerouting action=mark-connection new-connection-mark=pppoe-out${i}_conn passthrough=yes nth=${count},${i}\n`;
+      script += `add chain=prerouting connection-mark=pppoe-out${i}_conn action=mark-routing new-routing-mark=to_pppoe_out${i} passthrough=no\n`;
     }
   } else {
     // Source address method - RouterOS v7 compatible
